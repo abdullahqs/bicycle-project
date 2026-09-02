@@ -1,0 +1,36 @@
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Nearest Bike-Sharing Finder</title>
+    <!-- Prevents the browser from requesting a missing favicon.ico file -->
+    <link rel="icon" href="data:," />
+  </head>
+  <body>
+    <label for="toggle-choice">Choose an option:</label>
+    <select id="toggle-choice" name="choice">
+      <option value="" disabled selected>Select an option...</option>
+      <option value="option1">Return a bike</option>
+      <option value="option2">Get a bike</option>
+    </select>
+
+    <!-- Add manual refresh button -->
+    <button
+      id="refresh-btn"
+      style="margin-left: 10px; padding: 5px 10px; cursor: pointer"
+    >
+      🔄 Refresh
+    </button>
+
+    <div id="status-message" style="margin-top: 15px; font-weight: bold"></div>
+
+    <!-- Container for dynamic station list -->
+    <ul
+      id="station-list"
+      style="margin-top: 10px; list-style-type: none; padding-left: 0"
+    ></ul>
+
+    <!-- Single entry point module: apps.js imports everything else automatically -->
+    <script type="module" src="apps.js"></script>
+  </body>
+</html>
