@@ -3,7 +3,7 @@ The link for the program is below <br>
 [View Live App](https://bicycle-project-three.vercel.app)
 <br>
 The video show the app in action
-[![Watch the App Demo](thumbnail.png)](./recording_app.mp4) <br>
+[![Watch the App Demo](thumbnail.png)](./Recording_app.mp4) <br>
 
 below is the class diagram
 ![class diagram](./class-diagram.png)
