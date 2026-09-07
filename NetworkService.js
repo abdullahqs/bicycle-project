@@ -3,6 +3,35 @@ import DistanceCalculator from "./DistanceCalculator.js";
 export default class NetworkService {
   // Define apiUrl as a STATIC property
   static apiUrl = "https://api.citybik.es/v2/networks";
+  /**
+   * Fetches the global list of all bike networks from the API
+   */
+  static async fetchAllNetworks() {
+    try {
+      const response = await fetch("https://api.citybik.es/v2/networks");
+      const data = await response.json();
+      return data.networks; // Returns the array of all global networks
+    } catch (error) {
+      console.error("Failed to fetch networks:", error);
+      return []; // Return an empty array if the request fails
+    }
+  }
+  /**
+   * --- ADD THIS METHOD ---
+   * Fetches detailed data (including stations) for a specific network ID
+   */
+  static async fetchNetworkDetails(networkId) {
+    try {
+      const response = await fetch(
+        `https://api.citybik.es/v2/networks/${networkId}`,
+      );
+      const data = await response.json();
+      return data.network; // Returns the network object containing the stations array
+    } catch (error) {
+      console.error(`Failed to fetch network details for ${networkId}:`, error);
+      return null;
+    }
+  }
 
   static async getNearestNetwork(
     userLat,
