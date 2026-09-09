@@ -1,0 +1,18 @@
+# --- Dependencies ---
+node_modules/
+
+# --- Operating System Junk ---
+.DS_Store
+Thumbs.db
+
+# --- Code Editor Settings ---
+.vscode/
+.idea/
+
+# --- Environment & Secrets ---
+.env
+*.local
+
+# --- Build Outputs ---
+dist/
+build/

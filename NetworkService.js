@@ -17,7 +17,6 @@ export default class NetworkService {
     }
   }
   /**
-   * --- ADD THIS METHOD ---
    * Fetches detailed data (including stations) for a specific network ID
    */
   static async fetchNetworkDetails(networkId) {

@@ -38,6 +38,10 @@ export default class AppController {
     );
     this.networkTitleLabel = document.getElementById("networkTitleLabel");
 
+    // the google map start here
+    this.directionsContainer = document.getElementById("directionsContainer");
+    this.directionsBtn = document.getElementById("directionsBtn");
+
     this.bindEvents();
     this.startLocationBoot();
   }
@@ -63,18 +67,46 @@ export default class AppController {
     // When the user picks a specific station from the search dropdown
     this.stationDropdown?.addEventListener("change", (event) => {
       const selectedIndex = event.target.value;
+
       if (selectedIndex === "") {
-        this.selectedStationDetails.innerHTML = "";
+        if (this.selectedStationDetails)
+          this.selectedStationDetails.innerHTML = "";
+        if (this.directionsContainer)
+          this.directionsContainer.style.display = "none";
         return;
       }
 
       const station = this.currentStationsData[selectedIndex];
+
       if (station) {
-        this.selectedStationDetails.innerHTML = `
-          📍 Station: ${station.name}<br>
-          🚲 Free Bikes: ${station.free_bikes ?? 0}<br>
-          🅿️ Empty Docks: ${station.empty_slots ?? 0}
-        `;
+        if (this.selectedStationDetails) {
+          this.selectedStationDetails.innerHTML = `
+            📍 Station: ${station.name}<br>
+            🚲 Free Bikes: ${station.free_bikes ?? 0}<br>
+            🅿️ Empty Docks: ${station.empty_slots ?? 0}
+          `;
+        }
+
+        // Check if we have valid coordinates for the station
+        if (station.latitude && station.longitude) {
+          let mapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${station.latitude},${station.longitude}&travelmode=bicycling`;
+
+          if (this.cachedCoords) {
+            mapsUrl += `&origin=${this.cachedCoords.latitude},${this.cachedCoords.longitude}`;
+          }
+
+          if (this.directionsBtn) this.directionsBtn.href = mapsUrl;
+          if (this.directionsContainer)
+            this.directionsContainer.style.display = "block";
+        } else {
+          if (this.directionsContainer)
+            this.directionsContainer.style.display = "none";
+        }
+      } else {
+        if (this.selectedStationDetails)
+          this.selectedStationDetails.innerHTML = "";
+        if (this.directionsContainer)
+          this.directionsContainer.style.display = "none";
       }
     });
 
@@ -88,7 +120,6 @@ export default class AppController {
       }
     });
   }
-
   /**
    * Handles the initial GPS permission prompt and startup sequence
    */
@@ -227,15 +258,27 @@ export default class AppController {
       li.style.marginBottom = "6px";
       li.style.border = "1px solid #e0e0e0";
       li.style.borderRadius = "4px";
-
+      // Build the Google Maps URL cleanly (supporting GPS origin if available, or just station destination)
+      // Since updateStations already converted option1/option2 to true data keys:
       const metricLabel =
         sortKey === "empty_slots" ? "Empty Docks" : "Free Bikes";
       const metricValue = station[sortKey] ?? 0;
+      let mapsUrl = "#";
+      if (station.latitude && station.longitude) {
+        mapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${station.latitude},${station.longitude}&travelmode=bicycling`;
+
+        if (this.cachedCoords) {
+          mapsUrl += `&origin=${this.cachedCoords.latitude},${this.cachedCoords.longitude}`;
+        }
+      }
 
       li.innerHTML = `
         <strong>${index + 1}. ${station.name}</strong><br>
         📍 Distance: <strong>${station.distance ? station.distance.toFixed(2) + " km" : "N/A"}</strong> | 
-        🚲 ${metricLabel}: <strong>${metricValue}</strong>
+        🚲 ${metricLabel}: <strong>${metricValue}</strong><br>
+        <a href="${mapsUrl}" target="_blank" style="display: inline-block; margin-top: 6px; padding: 4px 10px; background-color: #4285f4; color: white; text-decoration: none; border-radius: 4px; font-size: 13px; font-weight: bold;">
+          🗺️ Get Cycling Directions
+        </a>
       `;
       this.stationList.appendChild(li);
     });
