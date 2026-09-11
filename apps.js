@@ -8,7 +8,7 @@ export default class AppController {
     this.cachedHash = "";
     this.pollingInterval = null;
     this.currentStationsData = []; // Store stations in memory for dropdown lookups
-
+    this.currentNetworkId = null;
     this.initDOM();
   }
 
@@ -20,6 +20,7 @@ export default class AppController {
     this.statusMessage = document.getElementById("status-message");
     this.stationList = document.getElementById("station-list");
     this.refreshBtn = document.getElementById("refresh-btn");
+    this.searchRefreshBtn = document.getElementById("searchRefreshBtn");
 
     // Search UI Elements
     this.searchSectionContainer = document.getElementById(
@@ -38,7 +39,7 @@ export default class AppController {
     );
     this.networkTitleLabel = document.getElementById("networkTitleLabel");
 
-    // the google map start here
+    // Google map / directions elements
     this.directionsContainer = document.getElementById("directionsContainer");
     this.directionsBtn = document.getElementById("directionsBtn");
 
@@ -52,6 +53,9 @@ export default class AppController {
   bindEvents() {
     this.dropdown?.addEventListener("change", () => this.updateStations(true));
     this.refreshBtn?.addEventListener("click", () => this.updateStations(true));
+    this.searchRefreshBtn?.addEventListener("click", () =>
+      this.handleSearchRefresh(),
+    );
 
     // Search event listeners
     this.searchBtn?.addEventListener("click", () => {
@@ -72,18 +76,21 @@ export default class AppController {
         if (this.selectedStationDetails)
           this.selectedStationDetails.innerHTML = "";
         if (this.directionsContainer)
-          this.directionsContainer.style.display = "none";
+          this.directionsContainer.classList.add("hidden");
         return;
       }
 
       const station = this.currentStationsData[selectedIndex];
 
       if (station) {
+        const timeString = new Date().toLocaleTimeString();
+        this.setSearchStatus("", "");
         if (this.selectedStationDetails) {
           this.selectedStationDetails.innerHTML = `
             📍 Station: ${station.name}<br>
             🚲 Free Bikes: ${station.free_bikes ?? 0}<br>
-            🅿️ Empty Docks: ${station.empty_slots ?? 0}
+            🅿️ Empty Docks: ${station.empty_slots ?? 0} <br>
+            🕒 Updated: ${timeString}
           `;
         }
 
@@ -97,16 +104,16 @@ export default class AppController {
 
           if (this.directionsBtn) this.directionsBtn.href = mapsUrl;
           if (this.directionsContainer)
-            this.directionsContainer.style.display = "block";
+            this.directionsContainer.classList.remove("hidden");
         } else {
           if (this.directionsContainer)
-            this.directionsContainer.style.display = "none";
+            this.directionsContainer.classList.add("hidden");
         }
       } else {
         if (this.selectedStationDetails)
           this.selectedStationDetails.innerHTML = "";
         if (this.directionsContainer)
-          this.directionsContainer.style.display = "none";
+          this.directionsContainer.classList.add("hidden");
       }
     });
 
@@ -120,6 +127,7 @@ export default class AppController {
       }
     });
   }
+
   /**
    * Handles the initial GPS permission prompt and startup sequence
    */
@@ -131,13 +139,13 @@ export default class AppController {
     const coords = await UserLocation.displayUserCoordinates();
 
     if (!coords) {
-      // GPS DENIED: Display fallback search section and inform user
+      // GPS DENIED: Display fallback search section and inform user using .hidden class
       this.setStatus(
         "⚠️ Location access denied. Please use the city search below.",
         "#d9534f",
       );
       if (this.searchSectionContainer) {
-        this.searchSectionContainer.style.display = "block";
+        this.searchSectionContainer.classList.remove("hidden");
       }
       return;
     }
@@ -145,7 +153,7 @@ export default class AppController {
     // GPS ALLOWED: Keep search section hidden
     this.cachedCoords = coords;
     if (this.searchSectionContainer) {
-      this.searchSectionContainer.style.display = "none";
+      this.searchSectionContainer.classList.add("hidden");
     }
 
     this.setStatus(
@@ -190,7 +198,15 @@ export default class AppController {
       return;
     }
 
-    if (!this.dropdown?.value) return;
+    if (!this.dropdown?.value) {
+      if (isManual) {
+        this.setStatus(
+          "⚠️ Please select an option from the dropdown first.",
+          "#d9534f",
+        );
+      }
+      return;
+    }
 
     const sortKey =
       this.dropdown.value === "option1" ? "empty_slots" : "free_bikes";
@@ -231,6 +247,47 @@ export default class AppController {
       );
     }
   }
+  /**
+   * Refreshes station data specifically for the active City Search network
+   */
+  async handleSearchRefresh() {
+    if (!this.currentNetworkId) {
+      this.setSearchStatus("⚠️ Please search for a city first.", "#d9534f");
+      return;
+    }
+
+    this.setSearchStatus("Refreshing station data...", "#666");
+    try {
+      const networkDetails = await NetworkService.fetchNetworkDetails(
+        this.currentNetworkId,
+      );
+
+      // Remember user's current dropdown selection
+      const previousSelection = this.stationDropdown.value;
+
+      this.populateStationDropdown(networkDetails);
+
+      // Restore their selection if it still exists in the refreshed list
+      if (
+        previousSelection !== "" &&
+        this.stationDropdown.options[previousSelection]
+      ) {
+        this.stationDropdown.value = previousSelection;
+        this.stationDropdown.dispatchEvent(new Event("change"));
+        //  If a station was selected, show this message:
+        this.setSearchStatus("Station data refreshed successfully!", "green");
+      } else {
+        //  If no station was chosen yet, show a more helpful message:
+        this.setSearchStatus(
+          "Network data refreshed! Please choose a station from the dropdown.",
+          "green",
+        );
+      }
+    } catch (error) {
+      console.error("Search refresh error:", error);
+      this.setSearchStatus("⚠️ Failed to refresh station data.", "#d9534f");
+    }
+  }
 
   /**
    * Renders the GPS-based station list
@@ -254,12 +311,8 @@ export default class AppController {
 
     stations.forEach((station, index) => {
       const li = document.createElement("li");
-      li.style.padding = "10px";
-      li.style.marginBottom = "6px";
-      li.style.border = "1px solid #e0e0e0";
-      li.style.borderRadius = "4px";
-      // Build the Google Maps URL cleanly (supporting GPS origin if available, or just station destination)
-      // Since updateStations already converted option1/option2 to true data keys:
+      li.className = "station-item"; // Clean class assignment
+
       const metricLabel =
         sortKey === "empty_slots" ? "Empty Docks" : "Free Bikes";
       const metricValue = station[sortKey] ?? 0;
@@ -275,8 +328,8 @@ export default class AppController {
       li.innerHTML = `
         <strong>${index + 1}. ${station.name}</strong><br>
         📍 Distance: <strong>${station.distance ? station.distance.toFixed(2) + " km" : "N/A"}</strong> | 
-        🚲 ${metricLabel}: <strong>${metricValue}</strong><br>
-        <a href="${mapsUrl}" target="_blank" style="display: inline-block; margin-top: 6px; padding: 4px 10px; background-color: #4285f4; color: white; text-decoration: none; border-radius: 4px; font-size: 13px; font-weight: bold;">
+        🚲 ${metricLabel}: <strong>${metricValue}</strong>
+        <a href="${mapsUrl}" target="_blank" class="directions-btn">
           🗺️ Get Cycling Directions
         </a>
       `;
@@ -289,14 +342,30 @@ export default class AppController {
    */
   async handleCitySearch(query) {
     const cleanQuery = query.trim().toLowerCase();
-    if (!cleanQuery) return;
+    if (!cleanQuery) {
+      this.setSearchStatus(
+        "⚠️ Please enter a city or network name first.",
+        "#d9534f",
+      );
+      return;
+    }
 
     this.setSearchStatus(
       `Searching for networks matching "${query}"...`,
       "#666",
     );
-    this.stationSelectContainer.style.display = "none";
+    this.stationSelectContainer.classList.add("hidden");
     this.selectedStationDetails.innerHTML = "";
+    // Hide the search refresh button during a new search
+    if (this.searchRefreshBtn) {
+      this.searchRefreshBtn.classList.add("hidden");
+    }
+    if (this.directionsContainer) {
+      this.directionsContainer.classList.add("hidden");
+    }
+    if (this.directionsBtn) {
+      this.directionsBtn.href = "#";
+    }
 
     try {
       const networks = await NetworkService.fetchAllNetworks();
@@ -327,6 +396,8 @@ export default class AppController {
         `Found network: ${matchedNetwork.name}. Loading stations...`,
         "#666",
       );
+
+      this.currentNetworkId = matchedNetwork.id;
 
       const networkDetails = await NetworkService.fetchNetworkDetails(
         matchedNetwork.id,
@@ -365,7 +436,11 @@ export default class AppController {
       this.stationDropdown.appendChild(option);
     });
 
-    this.stationSelectContainer.style.display = "block";
+    this.stationSelectContainer.classList.remove("hidden");
+    //Reveal the search refresh button now that a network is loaded
+    if (this.searchRefreshBtn) {
+      this.searchRefreshBtn.classList.remove("hidden");
+    }
   }
 
   /**

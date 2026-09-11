@@ -6,10 +6,12 @@
     <title>Nearest Bike-Sharing Finder</title>
     <!-- Prevents the browser from requesting a missing favicon.ico file -->
     <link rel="icon" href="data:," />
+    <!-- External Stylesheet -->
+    <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
     <!-- City Search Section (Hidden by default, revealed only if GPS access is denied) -->
-    <div id="searchSectionContainer" style="margin-bottom: 20px; display: none">
+    <div id="searchSectionContainer" class="hidden">
       <div class="search-section">
         <input
           type="text"
@@ -18,75 +20,53 @@
         />
         <button id="searchBtn">Search City</button>
       </div>
+
       <!-- Search status message appears right below the text bar -->
-      <div
-        id="searchStatusMessage"
-        style="margin-top: 8px; font-size: 14px; font-weight: bold"
-      ></div>
+      <div id="searchStatusMessage" class="status-text"></div>
     </div>
 
     <!-- Station Dropdown Section (Hidden until a city network is successfully loaded) -->
-    <div id="stationSelectContainer" style="margin-bottom: 20px; display: none">
+    <div id="stationSelectContainer" class="hidden">
       <label for="stationDropdown" id="networkTitleLabel"
         >Select a station:</label
-      ><br />
-      <select id="stationDropdown" style="margin-top: 5px; width: 300px">
+      >
+      <select id="stationDropdown">
         <option value="">-- Choose a station --</option>
       </select>
+      <!-- extra button -->
+      <button id="searchRefreshBtn" class="hidden">
+        🔄 Refresh City Stations
+      </button>
     </div>
 
     <!-- Selected Station Details Display -->
-    <div
-      id="selectedStationDetails"
-      style="margin-bottom: 20px; font-weight: bold"
-    ></div>
-    <!-- 🗺️ THIS IS THE NEW map  -->
-    <div id="directionsContainer" style="margin-bottom: 20px; display: none">
-      <a
-        id="directionsBtn"
-        href="#"
-        target="_blank"
-        style="
-          display: inline-block;
-          padding: 8px 15px;
-          background-color: #4285f4;
-          color: white;
-          text-decoration: none;
-          border-radius: 4px;
-          font-weight: bold;
-        "
-      >
+    <div id="selectedStationDetails" class="station-details"></div>
+
+    <!-- Directions Container -->
+    <div id="directionsContainer" class="hidden">
+      <a id="directionsBtn" href="#" target="_blank" class="directions-btn">
         🗺️ Open Directions in Google Maps
       </a>
     </div>
+
     <hr />
 
     <!-- GPS / Nearby Section -->
-    <div class="gps-section" style="margin-bottom: 20px">
+    <div class="gps-section">
       <label for="toggle-choice">Sort nearby GPS stations by:</label>
       <select id="toggle-choice">
         <option value="" disabled selected>Select an option...</option>
         <option value="option1">Empty Docks</option>
         <option value="option2">Free Bikes</option>
       </select>
-      <button
-        id="refresh-btn"
-        style="margin-left: 10px; padding: 5px 10px; cursor: pointer"
-      >
-        🔄 Refresh
-      </button>
+      <button id="refresh-btn">🔄 Refresh</button>
     </div>
 
     <!-- Main Status message display -->
-    <div id="status-message" style="margin-top: 15px; font-weight: bold">
-      Initializing...
-    </div>
+    <div id="status-message" class="status-text">Initializing...</div>
 
     <!-- Station List Container (Used by GPS sorting view) -->
-    <ul
-      id="station-list"
-      style="margin-top: 10px; list-style-type: none; padding-left: 0"
-    ></ul>
+    <ul id="station-list"></ul>
 
     <!-- Single entry point module: apps.js imports everything else automatically -->
     <script type="module" src="apps.js"></script>
