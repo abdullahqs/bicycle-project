@@ -6,13 +6,13 @@ The video show the app in action
 [![Watch the App Demo](thumbnail.png)](./Recording_app.mp4) <br>
 
 below is the class diagram
-![class diagram](./class-diagram.png)
+![class diagram](./class-diagram-update.png)
 
 <br>below is the flowchart
 ![flowchart diagram](./flowchart-diagram.png)
 
 <br> Sequence diagram
-![sequence diagram](./sequence-diagram.png)
+![sequence diagram](./sequence-diagram-update.png)
 
 <br>
 
@@ -22,6 +22,6 @@ I also return 50 stations closer to the user then 10 will be shown on the secern
 The picture below shows the network traffic which indicates that after the app runs for 8 hours around 50 requests happen and 4.3 mb transferred. The idea is if the user left the app inactive, the app would not make any fetches. The app fetched data every 30 second but if the data does not change, the dom will not be change. I used hash to make sure that only when there is a change in data, dom will change
 ![network](./network.png)
 <br><br>
-next I will add google map to show the direction to the station
 
 I run it locally through localhost 3000 with the command npx se
+the app gets update where the user can choose from the dropdown menu to chose station if gps is not avaliable also google maps direction has been added
