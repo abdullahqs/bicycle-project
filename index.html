@@ -54,12 +54,14 @@
     <!-- GPS / Nearby Section -->
     <div class="gps-section">
       <label for="toggle-choice">Sort nearby GPS stations by:</label>
-      <select id="toggle-choice">
-        <option value="" disabled selected>Select an option...</option>
-        <option value="option1">Empty Docks</option>
-        <option value="option2">Free Bikes</option>
-      </select>
-      <button id="refresh-btn">🔄 Refresh</button>
+      <div class="gps-controls">
+        <select id="toggle-choice">
+          <option value="" disabled selected>Select an option...</option>
+          <option value="option1">Empty Docks</option>
+          <option value="option2">Free Bikes</option>
+        </select>
+        <button id="refresh-btn">🔄 Refresh</button>
+      </div>
     </div>
 
     <!-- Main Status message display -->

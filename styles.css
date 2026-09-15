@@ -1,10 +1,46 @@
-CSS
-/* --- Global Styles --- */
+:root {
+  /* Colors (Updated to a clean, modern cool gray/white palette) */
+  --bg-color: #f4f6f8; /* Soft cool light gray background */
+  --text-main: #333333; /* Dark gray primary text */
+  --primary-btn: #4285f4; /* Action blue */
+  --primary-hover: #3367d6; /* Darker action blue for hover */
+  --border-color: #ccc; /* Default input border */
+  --border-subtle: #e0e0e0; /* Card border */
+  --card-bg: #ffffff; /* Pure white for cards */
+
+  /* Spacing System */
+  --space-xs: 6px;
+  --space-sm: 8px;
+  --space-md: 12px;
+  --space-lg: 16px;
+  --space-xl: 20px;
+
+  /* Typography / Type-Size System */
+  --font-family: Arial, sans-serif;
+  --text-sm: 13px;
+  --text-base: 14px;
+  --text-lg: 16px;
+
+  /* Shadows & Radius */
+  --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.05);
+  --radius-sm: 4px;
+  --radius-md: 6px;
+}
+
+/* ==========================================
+   GLOBAL STYLES
+   ========================================== */
+html {
+  background-color: var(--bg-color);
+}
+
 body {
-  font-family: Arial, sans-serif;
-  margin: 20px;
-  background-color: #f4f7f6;
-  color: #2c3e50;
+  font-family: var(--font-family);
+  margin: var(--space-md);
+  min-height: 100vh;
+  background-color: var(--bg-color);
+  color: var(--text-main);
+  font-size: var(--text-base);
 }
 
 /* Utility class for toggling visibility via JS */
@@ -12,109 +48,90 @@ body {
   display: none !important;
 }
 
-/* --- Section Spacing --- */
+/* ==========================================
+   LAYOUT & SECTIONS
+   ========================================== */
 #searchSectionContainer,
 #stationSelectContainer,
 #selectedStationDetails,
-#directionsContainer,
-.gps-section {
-  margin-bottom: 20px;
+#directionsContainer {
+  margin-bottom: var(--space-xl);
 }
 
-/* --- Search Section --- */
 .search-section {
   display: flex;
-  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-xl);
 }
 
+/* GPS Section stacked nicely for mobile */
+.gps-section {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-xl);
+}
+
+.gps-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  width: 100%;
+}
+
+/* ==========================================
+   FORM CONTROLS (Inputs & Selects)
+   ========================================== */
 #cityInput {
-  padding: 8px;
-  font-size: 14px;
+  padding: var(--space-sm);
+  font-size: var(--text-base);
   flex: 1;
+  width: 100%;
   max-width: 300px;
-  border: 1px solid #ccc;
-  border-radius: 4px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
 }
-#searchRefreshBtn,
+
+#stationDropdown,
+#toggle-choice {
+  padding: var(--space-sm);
+  font-size: var(--text-base);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color);
+  width: 100%;
+  max-width: 300px;
+  background-color: var(--card-bg);
+}
+
+/* ==========================================
+   UNIFIED BUTTON SYSTEM
+   ========================================== */
 #searchBtn,
-#refresh-btn {
-  padding: 6px 12px;
-  cursor: pointer;
-  background-color: #4285f4;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  font-weight: bold;
-}
-
-#searchRefreshBtn:hover,
-#searchBtn:hover,
-#refresh-btn:hover {
-  background-color: #3367d6;
-}
-
-#refresh-btn {
-  margin-left: 10px;
-}
-
-/* --- Dropdown Styles --- */
-#stationDropdown {
-  margin-top: 5px;
-  width: 300px;
-  padding: 6px;
-  border-radius: 4px;
-  border: 1px solid #ccc;
-}
-
-/* --- Text States & Labels --- */
-.status-text,
-#selectedStationDetails {
-  font-weight: bold;
-}
-
-#searchStatusMessage {
-  margin-top: 8px;
-  font-size: 14px;
-}
-
-#status-message {
-  margin-top: 15px;
-}
-
-/* --- GPS Station List Cards --- */
-#station-list {
-  margin-top: 10px;
-  list-style-type: none;
-  padding-left: 0;
-}
-/* Station list items generated via GPS */
-.station-item {
-  padding: 16px;
-  margin-bottom: 15px;
-  background-color: #ffffff;
-  border: 1px solid #e0e0e0;
-  border-radius: 6px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-}
-
-/* Map direction buttons */
+#searchRefreshBtn,
+#refresh-btn,
 .directions-btn {
-  display: block; /* Forces the button to start on a brand new line */
-  width: fit-content; /* Keeps the button sized snugly to its text */
-  margin-top: 6px; /* Controls the gap between text and button */
-  padding: 6px 12px;
-  background-color: #4285f4;
-  color: white;
-  text-decoration: none;
-  border-radius: 4px;
-  font-size: 13px;
+  padding: var(--space-sm) var(--space-md);
+  font-size: var(--text-base);
   font-weight: bold;
+  cursor: pointer;
+  background-color: var(--primary-btn);
+  color: #ffffff;
+  border: none;
+  border-radius: var(--radius-sm);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
 }
 
+#searchBtn:hover,
+#searchRefreshBtn:hover,
+#refresh-btn:hover,
 .directions-btn:hover {
-  background-color: #3367d6;
-}
-body {
-  background-color: #fdfbf7; /* Warm cream */
-  color: #333333; /* Standard dark gray text */
+  background-color: var(--primary-hover);
 }
