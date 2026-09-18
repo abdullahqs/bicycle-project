@@ -135,8 +135,17 @@ export default class AppController {
     this.dom.searchBtn?.addEventListener("click", () =>
       this.handleCitySearch(this.dom.searchInput.value),
     );
+
     this.dom.searchInput?.addEventListener("keypress", (e) => {
       if (e.key === "Enter") this.handleCitySearch(this.dom.searchInput.value);
+    });
+
+    // ⚡ Clear error banner and search status the moment the user types anything
+    this.dom.searchInput?.addEventListener("input", () => {
+      if (this.dom.stationList) {
+        this.dom.stationList.innerHTML = "";
+      }
+      this.updateDOM({ searchStatus: { text: "", color: "#666" } });
     });
 
     this.dom.stationDropdown?.addEventListener("change", (e) => {
@@ -180,6 +189,33 @@ export default class AppController {
         }
       }
     });
+  }
+  //anotherhelper to rendor error
+  renderErrorBanner(message, retryCallback) {
+    if (!this.dom.stationList) return;
+    this.dom.stationList.innerHTML = "";
+
+    const li = document.createElement("li");
+    li.className = "error-banner-item";
+    li.style.cssText =
+      "display: flex; flex-direction: column; align-items: center; padding: 20px; background-color: #fdf2f2; border: 1px solid #f5c6cb; border-radius: 8px; color: #721c24; text-align: center; gap: 10px;";
+
+    li.innerHTML = `
+      <span>⚠️ ${message}</span>
+      <button type="button" class="retry-btn" style="padding: 8px 16px; background-color: #d9534f; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">
+        Retry Request
+      </button>
+    `;
+
+    const retryBtn = li.querySelector(".retry-btn");
+    retryBtn.addEventListener("click", () => {
+      if (typeof retryCallback === "function") {
+        retryCallback();
+      }
+    });
+
+    this.dom.stationList.appendChild(li);
+    this.speak(`Error: ${message}. Press retry to try again.`);
   }
 
   selectStationByIndex(idx) {
@@ -262,18 +298,20 @@ export default class AppController {
     }
 
     if (!this.dom.dropdown?.value) {
-      if (isManual)
+      if (isManual) {
         this.updateDOM({
           status: {
             text: "Please select an option from the dropdown first.",
             color: "#d9534f",
           },
         });
+      }
       return;
     }
 
     const sortKey =
       this.dom.dropdown.value === "option1" ? "empty_slots" : "free_bikes";
+
     if (isManual) {
       this.updateDOM({
         status: { text: "Fetching latest station data.", color: "#666" },
@@ -288,6 +326,7 @@ export default class AppController {
         currentUserCoords.latitude,
         currentUserCoords.longitude,
       );
+
       if (!network) {
         this.updateDOM({
           status: {
@@ -295,8 +334,13 @@ export default class AppController {
             color: "#d9534f",
           },
         });
-        // Restore old list if network fails so skeletons don't get stuck
-        if (this.currentStationsData.length > 0) {
+
+        if (this.currentStationsData.length === 0) {
+          this.renderErrorBanner(
+            "No nearby bike-sharing network found or offline.",
+            () => this.updateStations(true),
+          );
+        } else {
           this.renderStations(
             this.currentStationsData,
             sortKey,
@@ -343,8 +387,15 @@ export default class AppController {
       this.updateDOM({
         status: { text: "Failed to update stations.", color: "#d9534f" },
       });
-      // Fallback: restore current list on error so skeletons never stay stuck
-      if (this.currentStationsData.length > 0) {
+
+      // If we don't have cached data to fall back on, show the error banner with a retry option
+      if (this.currentStationsData.length === 0) {
+        this.renderErrorBanner(
+          "Unable to fetch nearby station data. Please check your connection.",
+          () => this.updateStations(true),
+        );
+      } else {
+        // Fallback: restore current list on error so skeletons never stay stuck
         this.renderStations(
           this.currentStationsData,
           sortKey,
@@ -354,7 +405,6 @@ export default class AppController {
       }
     }
   }
-
   async handleSearchRefresh() {
     if (!this.currentNetworkId) {
       this.updateDOM({
@@ -369,6 +419,7 @@ export default class AppController {
     this.updateDOM({
       searchStatus: { text: "Refreshing station data.", color: "#666" },
     });
+
     try {
       const networkDetails = await NetworkService.fetchNetworkDetails(
         this.currentNetworkId,
@@ -397,12 +448,18 @@ export default class AppController {
         });
       }
     } catch (error) {
+      console.error(error);
       this.updateDOM({
         searchStatus: {
           text: "Failed to refresh station data.",
           color: "#d9534f",
         },
       });
+
+      // Show the error banner with a retry callback
+      this.renderErrorBanner("Failed to refresh station list.", () =>
+        this.handleSearchRefresh(),
+      );
     }
   }
 
@@ -416,13 +473,18 @@ export default class AppController {
     this.dom.stationList.removeAttribute("role");
     const timeString = new Date().toLocaleTimeString();
 
+    // ⚡ HANDLE ZERO STATIONS WITH AN ERROR/INFO BANNER
     if (stations.length === 0) {
       this.updateDOM({
         status: {
-          text: `Connected to ${networkName}. No stations match criteria.`,
+          text: `Connected to ${networkName}, but no stations are currently available.`,
           color: "#d9534f",
         },
       });
+
+      this.renderErrorBanner(`No stations found for ${networkName}.`, () =>
+        this.updateStations(true),
+      );
       return;
     }
 
@@ -448,9 +510,6 @@ export default class AppController {
       const previousValue = this.previousMetrics?.get(stationId);
       if (previousValue !== undefined && previousValue !== metricValue) {
         li.classList.add("data-changed");
-        console.log(
-          `[${timeString}] ✨ FLASH TRIGGERED for "${station.name}"! Old ${sortKey}: ${previousValue} -> New ${sortKey}: ${metricValue}`,
-        );
       }
 
       currentMetrics.set(stationId, metricValue);
@@ -493,7 +552,6 @@ export default class AppController {
       initializeOrUpdateMap(stations, sortKey);
     }, 50);
   }
-
   renderSkeletonLoaders(count = 3) {
     if (!this.dom.stationList) return;
     this.dom.stationList.innerHTML = "";
@@ -514,6 +572,9 @@ export default class AppController {
 
   async handleCitySearch(query) {
     const cleanQuery = query.trim().toLowerCase();
+    if (this.dom.stationList) {
+      this.dom.stationList.innerHTML = "";
+    }
     if (!cleanQuery) {
       this.updateDOM({
         searchStatus: {
@@ -555,6 +616,12 @@ export default class AppController {
             color: "#d9534f",
           },
         });
+
+        // Optional: Show an error banner in the station list area for search too
+        this.renderErrorBanner(
+          `No bike network found for "${query}". Check spelling and try again. Or try a new network`,
+          () => this.handleCitySearch(query),
+        );
         return;
       }
 
@@ -565,20 +632,27 @@ export default class AppController {
           color: "#666",
         },
       });
+
       const networkDetails = await NetworkService.fetchNetworkDetails(
         matched.id,
       );
       this.populateStationDropdown(networkDetails);
     } catch (error) {
+      console.error(error);
       this.updateDOM({
         searchStatus: {
-          text: "Failed to retrieve station data.",
+          text: "Failed to retrieve network or station data. Please check your connection.",
           color: "#d9534f",
         },
       });
+
+      // Render the error banner with a retry bound to the search query
+      this.renderErrorBanner(
+        "Network request failed. Please check your connection and retry.",
+        () => this.handleCitySearch(query),
+      );
     }
   }
-
   populateStationDropdown(networkData) {
     const stations = networkData.stations || [];
     this.currentStationsData = stations;
@@ -588,10 +662,20 @@ export default class AppController {
     if (stations.length === 0) {
       this.updateDOM({
         searchStatus: {
-          text: `Connected to ${networkData.name}, but no stations available.`,
+          text: `Connected to ${networkData.name}, but no stations are currently available.`,
           color: "#d9534f",
         },
+        showStationSelect: false,
+        showSearchRefresh: true, // Keep refresh visible so they can try again
       });
+
+      // Optionally, if you want the error banner to show up in the station list area too:
+      if (this.dom.stationList) {
+        this.renderErrorBanner(
+          `No stations available for ${networkData.name}.`,
+          () => this.handleSearchRefresh(),
+        );
+      }
       return;
     }
 
