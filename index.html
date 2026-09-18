@@ -8,69 +8,92 @@
     <link rel="icon" href="data:," />
     <!-- External Stylesheet -->
     <link rel="stylesheet" href="styles.css" />
+    <!-- MapLibre CSS -->
+    <link
+      href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css"
+      rel="stylesheet"
+    />
   </head>
   <body>
-    <!-- City Search Section (Hidden by default, revealed only if GPS access is denied) -->
-    <div id="searchSectionContainer" class="hidden">
-      <div class="search-section">
-        <input
-          type="text"
-          id="cityInput"
-          placeholder="Enter city name (e.g., Paris, Washington)..."
-        />
-        <button id="searchBtn">Search City</button>
+    <main>
+      <!-- 1. GPS / Nearby Sorting Section (Primary View) -->
+      <section class="gps-section">
+        <label for="toggle-choice">Sort nearby GPS stations by:</label>
+        <div class="gps-controls">
+          <select id="toggle-choice">
+            <option value="" disabled selected>Select an option...</option>
+            <option value="option1">Empty Docks</option>
+            <option value="option2">Free Bikes</option>
+          </select>
+          <button id="refresh-btn" type="button">
+            <span aria-hidden="true">🔄</span> Refresh
+          </button>
+        </div>
+      </section>
+
+      <!-- 2. Main Status Message Display -->
+      <div id="status-message" class="status-text">Initializing...</div>
+
+      <!-- 3. Station List Container (Placed high up for clean arrow-key reading) -->
+      <ul id="station-list" aria-label="Nearby stations list"></ul>
+      <hr />
+
+      <!-- 4. Fallback City Search Section (Revealed only if GPS access is denied) -->
+      <div id="searchSectionContainer" class="hidden">
+        <div class="search-section">
+          <!-- Added aria-label so Narrator reads a clean prompt instead of stuttering on the placeholder -->
+          <label for="cityInput" class="hidden">Enter city name</label>
+          <input
+            type="text"
+            id="cityInput"
+            aria-label="Enter city name"
+            placeholder="Enter city name (e.g., Paris, Washington)..."
+          />
+          <button id="searchBtn" type="button">Search City</button>
+        </div>
+        <div id="searchStatusMessage" class="status-text"></div>
       </div>
 
-      <!-- Search status message appears right below the text bar -->
-      <div id="searchStatusMessage" class="status-text"></div>
-    </div>
-
-    <!-- Station Dropdown Section (Hidden until a city network is successfully loaded) -->
-    <div id="stationSelectContainer" class="hidden">
-      <label for="stationDropdown" id="networkTitleLabel"
-        >Select a station:</label
-      >
-      <select id="stationDropdown">
-        <option value="">-- Choose a station --</option>
-      </select>
-      <!-- extra button -->
-      <button id="searchRefreshBtn" class="hidden">
-        🔄 Refresh City Stations
-      </button>
-    </div>
-
-    <!-- Selected Station Details Display -->
-    <div id="selectedStationDetails" class="station-details"></div>
-
-    <!-- Directions Container -->
-    <div id="directionsContainer" class="hidden">
-      <a id="directionsBtn" href="#" target="_blank" class="directions-btn">
-        🗺️ Open Directions in Google Maps
-      </a>
-    </div>
-
-    <hr />
-
-    <!-- GPS / Nearby Section -->
-    <div class="gps-section">
-      <label for="toggle-choice">Sort nearby GPS stations by:</label>
-      <div class="gps-controls">
-        <select id="toggle-choice">
-          <option value="" disabled selected>Select an option...</option>
-          <option value="option1">Empty Docks</option>
-          <option value="option2">Free Bikes</option>
+      <!-- 5. City Station Dropdown Section -->
+      <div id="stationSelectContainer" class="hidden">
+        <label for="stationDropdown" id="networkTitleLabel"
+          >Select a station:</label
+        >
+        <select id="stationDropdown">
+          <option value="">-- Choose a station --</option>
         </select>
-        <button id="refresh-btn">🔄 Refresh</button>
+        <!-- Wrapped the emoji in aria-hidden="true" just like your main refresh button -->
+        <button id="searchRefreshBtn" class="hidden" type="button">
+          <span aria-hidden="true">🔄</span> Refresh City Stations
+        </button>
       </div>
-    </div>
+      <!-- Selected Station Details Display -->
+      <div id="selectedStationDetails" class="station-details"></div>
 
-    <!-- Main Status message display -->
-    <div id="status-message" class="status-text">Initializing...</div>
-
-    <!-- Station List Container (Used by GPS sorting view) -->
-    <ul id="station-list"></ul>
+      <!-- 6. Directions Container & Map (Placed LAST at the bottom so it never intercepts list navigation) -->
+      <div
+        id="directionsContainer"
+        class="hidden"
+        role="region"
+        aria-label="Route directions and map"
+      >
+        <div
+          id="directionsHeader"
+          style="
+            padding: var(--space-sm);
+            font-weight: bold;
+            background-color: var(--card-bg);
+            border-bottom: 1px solid var(--border-subtle);
+          "
+        ></div>
+        <div id="map" aria-hidden="true"></div>
+      </div>
+    </main>
 
     <!-- Single entry point module: apps.js imports everything else automatically -->
     <script type="module" src="apps.js"></script>
+
+    <!-- MapLibre JS Library -->
+    <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
   </body>
 </html>

@@ -135,6 +135,7 @@ body {
 .directions-btn:hover {
   background-color: var(--primary-hover);
 }
+
 /* ==========================================
    AUTOMATIC DARK MODE (Method 1)
    ========================================== */
@@ -153,4 +154,161 @@ body {
     color: var(--text-main);
     border-color: var(--border-color);
   }
+}
+
+/* The actual map box inside the container */
+#map {
+  width: 100%;
+  height: 400px;
+  border-radius: 8px;
+}
+
+/* ==========================================
+   STATION LIST STYLING FIX
+   ========================================== */
+#station-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.station-item {
+  background-color: var(--card-bg);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
+  margin-bottom: var(--space-md);
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+
+  /* Animate opacity and movement smoothly over 0.2 seconds */
+  transition:
+    opacity 0.2s ease-out,
+    transform 0.2s ease-out;
+
+  /* Start slightly transparent and pushed down */
+  opacity: 0;
+  transform: translateY(8px);
+}
+
+.station-text {
+  flex: 1;
+  font-size: var(--text-base);
+  color: var(--text-main);
+}
+
+.station-text-block {
+  font-size: var(--text-base);
+  color: var(--text-main);
+  margin-bottom: var(--space-sm);
+  font-weight: normal;
+}
+
+.station-btn-block {
+  margin-top: var(--space-xs);
+}
+
+@keyframes highlightFlash {
+  0% {
+    background-color: #d4edda;
+    border-color: #28a745;
+  }
+  100% {
+    background-color: var(--card-bg);
+    border-color: var(--border-subtle);
+  }
+}
+
+.station-item.data-changed {
+  animation: highlightFlash 5s ease-out;
+}
+
+/* When the item is fully on the screen */
+.station-item.appear {
+  opacity: 1;
+  transform: translateY(0);
+}
+/* ==========================================
+   STATION DETAILS PULSE ANIMATION
+   ========================================== */
+@keyframes detailPulse {
+  0% {
+    opacity: 0;
+    transform: translateY(-6px);
+    background-color: #e8f0fe; /* Soft accent blue tint */
+  }
+  50% {
+    opacity: 1;
+    background-color: #e8f0fe;
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+    background-color: transparent;
+  }
+}
+
+#selectedStationDetails.updated {
+  animation: detailPulse 0.5s ease-out;
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-sm);
+}
+/* ==========================================
+   SKELETON LOADING PLACEHOLDERS
+   ========================================== */
+@keyframes shimmerPulse {
+  0% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 0.9;
+  }
+  100% {
+    opacity: 0.4;
+  }
+}
+
+.skeleton-card {
+  background-color: var(--card-bg);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
+  margin-bottom: var(--space-md);
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  animation: shimmerPulse 1.5s infinite ease-in-out;
+}
+
+.skeleton-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.skeleton-line {
+  height: 14px;
+  background-color: var(--border-subtle);
+  border-radius: var(--radius-sm);
+}
+
+.skeleton-line.long {
+  width: 75%;
+}
+
+.skeleton-line.short {
+  width: 40%;
+}
+
+.skeleton-btn {
+  width: 100px;
+  height: 32px;
+  background-color: var(--border-subtle);
+  border-radius: var(--radius-sm);
 }

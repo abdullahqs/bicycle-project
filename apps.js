@@ -2,462 +2,623 @@ import UserLocation from "./UserLocation.js";
 import NetworkService from "./NetworkService.js";
 import DataHandler from "./DataHandler.js";
 
+// Module-scoped variables
+let mapInstance = null;
+let stationMarkers = [];
+let userMarker = null;
+let currentUserCoords = null;
+let appControllerInstance = null;
+window.debugAppController = null;
+
 export default class AppController {
   constructor() {
-    this.cachedCoords = null;
+    appControllerInstance = this;
     this.cachedHash = "";
     this.pollingInterval = null;
-    this.currentStationsData = []; // Store stations in memory for dropdown lookups
+    this.currentStationsData = [];
     this.currentNetworkId = null;
+    this.lastRenderedSortKey = null;
     this.initDOM();
+    this.previousMetrics = new Map(); // Tracks previous bike/dock counts for highlighting changes
+    window.debugAppController = this;
   }
 
-  /**
-   * Binds DOM elements and initializes the application lifecycle
-   */
   initDOM() {
-    this.dropdown = document.getElementById("toggle-choice");
-    this.statusMessage = document.getElementById("status-message");
-    this.stationList = document.getElementById("station-list");
-    this.refreshBtn = document.getElementById("refresh-btn");
-    this.searchRefreshBtn = document.getElementById("searchRefreshBtn");
+    this.dom = {
+      dropdown: document.getElementById("toggle-choice"),
+      statusMessage: document.getElementById("status-message"),
+      stationList: document.getElementById("station-list"),
+      refreshBtn: document.getElementById("refresh-btn"),
+      searchRefreshBtn: document.getElementById("searchRefreshBtn"),
+      searchSection: document.getElementById("searchSectionContainer"),
+      searchInput: document.getElementById("cityInput"),
+      searchBtn: document.getElementById("searchBtn"),
+      searchStatus: document.getElementById("searchStatusMessage"),
+      stationSelect: document.getElementById("stationSelectContainer"),
+      stationDropdown: document.getElementById("stationDropdown"),
+      stationDetails: document.getElementById("selectedStationDetails"),
+      networkTitle: document.getElementById("networkTitleLabel"),
+      directions: document.getElementById("directionsContainer"),
+    };
 
-    // Search UI Elements
-    this.searchSectionContainer = document.getElementById(
-      "searchSectionContainer",
-    );
-    this.searchInput = document.getElementById("cityInput");
-    this.searchBtn = document.getElementById("searchBtn");
-    this.searchStatusMessage = document.getElementById("searchStatusMessage");
-
-    this.stationSelectContainer = document.getElementById(
-      "stationSelectContainer",
-    );
-    this.stationDropdown = document.getElementById("stationDropdown");
-    this.selectedStationDetails = document.getElementById(
-      "selectedStationDetails",
-    );
-    this.networkTitleLabel = document.getElementById("networkTitleLabel");
-
-    // Google map / directions elements
-    this.directionsContainer = document.getElementById("directionsContainer");
-    this.directionsBtn = document.getElementById("directionsBtn");
+    // Inject a dedicated screen reader announcement region
+    this.setupScreenReaderAnnouncer();
 
     this.bindEvents();
     this.startLocationBoot();
   }
 
-  /**
-   * Sets up all user interaction and visibility listeners
-   */
+  setupScreenReaderAnnouncer() {
+    let announcer = document.getElementById("sr-announcer");
+    if (!announcer) {
+      announcer = document.createElement("div");
+      announcer.id = "sr-announcer";
+      announcer.setAttribute("aria-live", "polite");
+      announcer.setAttribute("aria-atomic", "true");
+      announcer.style.position = "absolute";
+      announcer.style.width = "1px";
+      announcer.style.height = "1px";
+      announcer.style.padding = "0";
+      announcer.style.margin = "-1px";
+      announcer.style.overflow = "hidden";
+      announcer.style.clip = "rect(0, 0, 0, 0)";
+      announcer.style.whiteSpace = "nowrap";
+      announcer.style.border = "0";
+      document.body.appendChild(announcer);
+    }
+    this.dom.srAnnouncer = announcer;
+  }
+
+  speak(message) {
+    if (!this.dom.srAnnouncer) return;
+    this.dom.srAnnouncer.textContent = "";
+    setTimeout(() => {
+      this.dom.srAnnouncer.textContent = message;
+    }, 50);
+  }
+
+  updateDOM(state = {}) {
+    if (state.status !== undefined && this.dom.statusMessage) {
+      this.dom.statusMessage.textContent = state.status.text || "";
+      this.dom.statusMessage.style.color = state.status.color || "#000";
+      if (state.status.text) {
+        this.speak(state.status.text);
+      }
+    }
+
+    if (state.searchStatus !== undefined && this.dom.searchStatus) {
+      this.dom.searchStatus.textContent = state.searchStatus.text || "";
+      this.dom.searchStatus.style.color = state.searchStatus.color || "#000";
+      if (state.searchStatus.text) {
+        this.speak(state.searchStatus.text);
+      }
+    }
+
+    if (state.stationDetails !== undefined && this.dom.stationDetails) {
+      this.dom.stationDetails.innerHTML = state.stationDetails;
+    }
+
+    if (state.networkTitle !== undefined && this.dom.networkTitle) {
+      this.dom.networkTitle.textContent = state.networkTitle;
+    }
+
+    const visibilityMap = {
+      searchSection: state.showSearch,
+      searchRefreshBtn: state.showSearchRefresh,
+      stationSelect: state.showStationSelect,
+      directions: state.showDirections,
+    };
+
+    for (const [key, show] of Object.entries(visibilityMap)) {
+      if (show !== undefined && this.dom[key]) {
+        this.dom[key].classList.toggle("hidden", !show);
+      }
+    }
+  }
+
   bindEvents() {
-    this.dropdown?.addEventListener("change", () => this.updateStations(true));
-    this.refreshBtn?.addEventListener("click", () => this.updateStations(true));
-    this.searchRefreshBtn?.addEventListener("click", () =>
+    const handleUpdate = (e) => {
+      this.updateStations(true);
+      if (e.target === this.dom.dropdown) {
+        this.dom.dropdown.focus();
+      }
+    };
+
+    this.dom.dropdown?.addEventListener("change", handleUpdate);
+    this.dom.refreshBtn?.addEventListener("click", () =>
+      this.updateStations(true),
+    );
+    this.dom.searchRefreshBtn?.addEventListener("click", () =>
       this.handleSearchRefresh(),
     );
 
-    // Search event listeners
-    this.searchBtn?.addEventListener("click", () => {
-      this.handleCitySearch(this.searchInput.value);
+    this.dom.searchBtn?.addEventListener("click", () =>
+      this.handleCitySearch(this.dom.searchInput.value),
+    );
+    this.dom.searchInput?.addEventListener("keypress", (e) => {
+      if (e.key === "Enter") this.handleCitySearch(this.dom.searchInput.value);
     });
 
-    this.searchInput?.addEventListener("keypress", (event) => {
-      if (event.key === "Enter") {
-        this.handleCitySearch(this.searchInput.value);
+    this.dom.stationDropdown?.addEventListener("change", (e) => {
+      const idx = e.target.value;
+      this.selectStationByIndex(idx);
+    });
+
+    this.dom.stationList?.addEventListener("click", (e) => {
+      const btn = e.target.closest(".gps-dir-btn");
+      if (!btn) return;
+
+      const idx = btn.dataset.index;
+      if (idx !== undefined) {
+        if (this.dom.stationDropdown) this.dom.stationDropdown.value = idx;
+        this.selectStationByIndex(idx);
       }
     });
 
-    // When the user picks a specific station from the search dropdown
-    this.stationDropdown?.addEventListener("change", (event) => {
-      const selectedIndex = event.target.value;
+    window.addEventListener("focus", () => {
+      console.log("🔄 Window focused. Checking if list needs refresh...");
 
-      if (selectedIndex === "") {
-        if (this.selectedStationDetails)
-          this.selectedStationDetails.innerHTML = "";
-        if (this.directionsContainer)
-          this.directionsContainer.classList.add("hidden");
-        return;
-      }
-
-      const station = this.currentStationsData[selectedIndex];
-
-      if (station) {
-        const timeString = new Date().toLocaleTimeString();
-        this.setSearchStatus("", "");
-        if (this.selectedStationDetails) {
-          this.selectedStationDetails.innerHTML = `
-            📍 Station: ${station.name}<br>
-            🚲 Free Bikes: ${station.free_bikes ?? 0}<br>
-            🅿️ Empty Docks: ${station.empty_slots ?? 0} <br>
-            🕒 Updated: ${timeString}
-          `;
-        }
-
-        // Check if we have valid coordinates for the station
-        if (station.latitude && station.longitude) {
-          let mapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${station.latitude},${station.longitude}&travelmode=bicycling`;
-
-          if (this.cachedCoords) {
-            mapsUrl += `&origin=${this.cachedCoords.latitude},${this.cachedCoords.longitude}`;
-          }
-
-          if (this.directionsBtn) this.directionsBtn.href = mapsUrl;
-          if (this.directionsContainer)
-            this.directionsContainer.classList.remove("hidden");
-        } else {
-          if (this.directionsContainer)
-            this.directionsContainer.classList.add("hidden");
-        }
-      } else {
-        if (this.selectedStationDetails)
-          this.selectedStationDetails.innerHTML = "";
-        if (this.directionsContainer)
-          this.directionsContainer.classList.add("hidden");
+      if (
+        currentUserCoords &&
+        this.dom.dropdown?.value &&
+        (!this.dom.stationList || this.dom.stationList.children.length === 0)
+      ) {
+        console.log("⚡ Station list is empty on focus. Repopulating...");
+        this.updateStations(false);
       }
     });
 
-    // Pause polling when tab is hidden to save resources
     document.addEventListener("visibilitychange", () => {
       if (document.hidden) {
+        console.log("💤 Tab hidden, stopping background polling.");
         this.stopPolling();
-      } else if (this.cachedCoords && this.dropdown?.value) {
-        this.updateStations(false);
-        this.startPolling();
+      } else {
+        console.log("👀 Tab visible again. Forcing data update...");
+        if (currentUserCoords && this.dom.dropdown?.value) {
+          this.updateStations(false);
+          this.startPolling();
+        }
       }
     });
   }
 
-  /**
-   * Handles the initial GPS permission prompt and startup sequence
-   */
+  selectStationByIndex(idx) {
+    if (idx === "" || idx === undefined) {
+      this.updateDOM({ stationDetails: "", showDirections: false });
+      return;
+    }
+
+    const station = this.currentStationsData[idx];
+    if (station?.latitude && station?.longitude) {
+      const time = new Date().toLocaleTimeString();
+      const sortKey =
+        this.dom.dropdown?.value === "option1" ? "empty_slots" : "free_bikes";
+      const metricLabel =
+        sortKey === "empty_slots" ? "Empty Docks" : "Free Bikes";
+
+      const detailsText = `Selected station: ${station.name}. ${metricLabel}: ${station[sortKey] ?? 0}. Updated at ${time}`;
+
+      this.updateDOM({
+        searchStatus: { text: "", color: "" },
+        stationDetails: detailsText,
+        showDirections: true,
+      });
+
+      const detailsEl = this.dom.stationDetails;
+      if (detailsEl) {
+        detailsEl.classList.remove("updated");
+        void detailsEl.offsetWidth; // Force browser reflow
+        detailsEl.classList.add("updated");
+      }
+      this.speak(detailsText);
+      showRouteToStation(station, sortKey);
+    } else {
+      this.updateDOM({ stationDetails: "", showDirections: false });
+    }
+  }
+
   async startLocationBoot() {
-    this.setStatus(
-      "Requesting location access to find nearby stations...",
-      "#666",
-    );
+    this.updateDOM({
+      status: {
+        text: "Requesting location access to find nearby stations.",
+        color: "#666",
+      },
+    });
     const coords = await UserLocation.displayUserCoordinates();
 
     if (!coords) {
-      // GPS DENIED: Display fallback search section and inform user using .hidden class
-      this.setStatus(
-        "⚠️ Location access denied. Please use the city search below.",
-        "#d9534f",
-      );
-      if (this.searchSectionContainer) {
-        this.searchSectionContainer.classList.remove("hidden");
-      }
+      this.updateDOM({
+        status: {
+          text: "Location access denied. Please use the city search below.",
+          color: "#d9534f",
+        },
+        showSearch: true,
+      });
       return;
     }
 
-    // GPS ALLOWED: Keep search section hidden
-    this.cachedCoords = coords;
-    if (this.searchSectionContainer) {
-      this.searchSectionContainer.classList.add("hidden");
-    }
+    currentUserCoords = coords;
+    this.updateDOM({
+      status: {
+        text: "Location acquired. Select an option above to find stations.",
+        color: "green",
+      },
+      showSearch: false,
+    });
 
-    this.setStatus(
-      "Location acquired! Select an option above to find stations.",
-      "green",
-    );
-    if (this.dropdown?.value) {
-      this.updateStations(true);
-    }
+    if (this.dom.dropdown?.value) this.updateStations(true);
     this.startPolling();
   }
 
-  /**
-   * Helper to safely update the main status message
-   */
-  setStatus(message, color) {
-    if (this.statusMessage) {
-      this.statusMessage.textContent = message;
-      this.statusMessage.style.color = color;
-    }
-  }
-
-  /**
-   * Helper to update the search-specific status message below the search input
-   */
-  setSearchStatus(message, color) {
-    if (this.searchStatusMessage) {
-      this.searchStatusMessage.textContent = message;
-      this.searchStatusMessage.style.color = color || "#000";
-    }
-  }
-
-  /**
-   * Fetches networks, calculates distances, and updates GPS station view
-   */
   async updateStations(isManual) {
-    if (!this.cachedCoords) {
-      this.setStatus(
-        "⚠️ Location access is required for GPS features. Please use the City Search above instead.",
-        "#d9534f",
-      );
+    if (!currentUserCoords) {
+      this.updateDOM({
+        status: {
+          text: "Location access required. Use City Search.",
+          color: "#d9534f",
+        },
+      });
       return;
     }
 
-    if (!this.dropdown?.value) {
-      if (isManual) {
-        this.setStatus(
-          "⚠️ Please select an option from the dropdown first.",
-          "#d9534f",
-        );
-      }
+    if (!this.dom.dropdown?.value) {
+      if (isManual)
+        this.updateDOM({
+          status: {
+            text: "Please select an option from the dropdown first.",
+            color: "#d9534f",
+          },
+        });
       return;
     }
 
     const sortKey =
-      this.dropdown.value === "option1" ? "empty_slots" : "free_bikes";
-
+      this.dom.dropdown.value === "option1" ? "empty_slots" : "free_bikes";
     if (isManual) {
-      this.setStatus("Fetching latest station data...", "#666");
+      this.updateDOM({
+        status: { text: "Fetching latest station data.", color: "#666" },
+      });
     }
+
+    // ⚡ SHOW SKELETONS IMMEDIATELY AT THE START
+    this.renderSkeletonLoaders(4);
 
     try {
       const network = await NetworkService.getNearestNetwork(
-        this.cachedCoords.latitude,
-        this.cachedCoords.longitude,
+        currentUserCoords.latitude,
+        currentUserCoords.longitude,
       );
-
       if (!network) {
-        this.setStatus("⚠️ No nearby bike-sharing network found.", "#d9534f");
+        this.updateDOM({
+          status: {
+            text: "No nearby bike-sharing network found.",
+            color: "#d9534f",
+          },
+        });
+        // Restore old list if network fails so skeletons don't get stuck
+        if (this.currentStationsData.length > 0) {
+          this.renderStations(
+            this.currentStationsData,
+            sortKey,
+            "Bike Network",
+            false,
+          );
+        }
         return;
       }
 
       const bestStations = await DataHandler.fetchStations(
         network.id,
-        this.cachedCoords.latitude,
-        this.cachedCoords.longitude,
+        currentUserCoords.latitude,
+        currentUserCoords.longitude,
         sortKey,
         10,
       );
-
       const newHash = JSON.stringify(bestStations);
-      if (!isManual && newHash === this.cachedHash) return;
-      this.cachedHash = newHash;
 
-      this.renderStations(bestStations, sortKey, network.name);
+      // If automatic poll and nothing changed, restore the current list and exit
+      if (
+        !isManual &&
+        newHash === this.cachedHash &&
+        this.lastRenderedSortKey === sortKey
+      ) {
+        if (this.currentStationsData.length > 0) {
+          this.renderStations(
+            this.currentStationsData,
+            sortKey,
+            network.name,
+            false,
+          );
+        }
+        return;
+      }
+
+      this.cachedHash = newHash;
+      this.lastRenderedSortKey = sortKey;
+      this.currentStationsData = bestStations;
+
+      this.renderStations(bestStations, sortKey, network.name, isManual);
     } catch (error) {
-      console.error("AppController Error:", error);
-      this.setStatus(
-        "⚠️ Failed to update stations. Please try again.",
-        "#d9534f",
-      );
+      console.error(error);
+      this.updateDOM({
+        status: { text: "Failed to update stations.", color: "#d9534f" },
+      });
+      // Fallback: restore current list on error so skeletons never stay stuck
+      if (this.currentStationsData.length > 0) {
+        this.renderStations(
+          this.currentStationsData,
+          sortKey,
+          "Bike Network",
+          false,
+        );
+      }
     }
   }
-  /**
-   * Refreshes station data specifically for the active City Search network
-   */
+
   async handleSearchRefresh() {
     if (!this.currentNetworkId) {
-      this.setSearchStatus("⚠️ Please search for a city first.", "#d9534f");
+      this.updateDOM({
+        searchStatus: {
+          text: "Please search for a city first.",
+          color: "#d9534f",
+        },
+      });
       return;
     }
 
-    this.setSearchStatus("Refreshing station data...", "#666");
+    this.updateDOM({
+      searchStatus: { text: "Refreshing station data.", color: "#666" },
+    });
     try {
       const networkDetails = await NetworkService.fetchNetworkDetails(
         this.currentNetworkId,
       );
-
-      // Remember user's current dropdown selection
-      const previousSelection = this.stationDropdown.value;
-
+      const prevSelection = this.dom.stationDropdown.value;
       this.populateStationDropdown(networkDetails);
 
-      // Restore their selection if it still exists in the refreshed list
       if (
-        previousSelection !== "" &&
-        this.stationDropdown.options[previousSelection]
+        prevSelection !== "" &&
+        this.dom.stationDropdown.options[prevSelection]
       ) {
-        this.stationDropdown.value = previousSelection;
-        this.stationDropdown.dispatchEvent(new Event("change"));
-        //  If a station was selected, show this message:
-        this.setSearchStatus("Station data refreshed successfully!", "green");
+        this.dom.stationDropdown.value = prevSelection;
+        this.dom.stationDropdown.dispatchEvent(new Event("change"));
+        this.updateDOM({
+          searchStatus: {
+            text: "Station data refreshed successfully.",
+            color: "green",
+          },
+        });
       } else {
-        //  If no station was chosen yet, show a more helpful message:
-        this.setSearchStatus(
-          "Network data refreshed! Please choose a station from the dropdown.",
-          "green",
-        );
+        this.updateDOM({
+          searchStatus: {
+            text: "Network data refreshed. Choose a station.",
+            color: "green",
+          },
+        });
       }
     } catch (error) {
-      console.error("Search refresh error:", error);
-      this.setSearchStatus("⚠️ Failed to refresh station data.", "#d9534f");
+      this.updateDOM({
+        searchStatus: {
+          text: "Failed to refresh station data.",
+          color: "#d9534f",
+        },
+      });
     }
   }
 
-  /**
-   * Renders the GPS-based station list
-   */
-  renderStations(stations, sortKey, networkName) {
-    this.stationList.innerHTML = "";
+  renderStations(stations, sortKey, networkName, isManual = true) {
+    if (this.currentSortKey !== sortKey) {
+      this.previousMetrics.clear();
+      this.currentSortKey = sortKey;
+    }
+
+    this.dom.stationList.innerHTML = "";
+    this.dom.stationList.removeAttribute("role");
     const timeString = new Date().toLocaleTimeString();
 
     if (stations.length === 0) {
-      this.setStatus(
-        `Connected to ${networkName}. No stations match criteria.`,
-        "#d9534f",
-      );
+      this.updateDOM({
+        status: {
+          text: `Connected to ${networkName}. No stations match criteria.`,
+          color: "#d9534f",
+        },
+      });
       return;
     }
 
-    this.setStatus(
-      `Showing nearest stations for: ${networkName} | 🕒 Updated: ${timeString}`,
-      "green",
-    );
+    this.updateDOM({
+      status: {
+        text: `Showing nearest stations for ${networkName}. Updated at ${timeString}`,
+        color: "green",
+      },
+      showDirections: true,
+    });
+
+    const currentMetrics = new Map();
 
     stations.forEach((station, index) => {
       const li = document.createElement("li");
-      li.className = "station-item"; // Clean class assignment
+      li.className = "station-item";
 
       const metricLabel =
         sortKey === "empty_slots" ? "Empty Docks" : "Free Bikes";
       const metricValue = station[sortKey] ?? 0;
-      let mapsUrl = "#";
-      if (station.latitude && station.longitude) {
-        mapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${station.latitude},${station.longitude}&travelmode=bicycling`;
+      const stationId = station.id || station.name;
 
-        if (this.cachedCoords) {
-          mapsUrl += `&origin=${this.cachedCoords.latitude},${this.cachedCoords.longitude}`;
-        }
+      const previousValue = this.previousMetrics?.get(stationId);
+      if (previousValue !== undefined && previousValue !== metricValue) {
+        li.classList.add("data-changed");
+        console.log(
+          `[${timeString}] ✨ FLASH TRIGGERED for "${station.name}"! Old ${sortKey}: ${previousValue} -> New ${sortKey}: ${metricValue}`,
+        );
       }
 
+      currentMetrics.set(stationId, metricValue);
+
+      const hasCoords = station.latitude && station.longitude;
+      const distanceStr = station.distance
+        ? `${station.distance.toFixed(1)} kilometers away`
+        : "Distance unknown";
+
+      const fullNarration = `Station ${index + 1}, ${station.name}, ${distanceStr}, ${metricLabel} ${metricValue}. Press Enter to show map route.`;
+      li.setAttribute("aria-label", fullNarration);
+
       li.innerHTML = `
-        <strong>${index + 1}. ${station.name}</strong><br>
-        📍 Distance: <strong>${station.distance ? station.distance.toFixed(2) + " km" : "N/A"}</strong> | 
-        🚲 ${metricLabel}: <strong>${metricValue}</strong>
-        <a href="${mapsUrl}" target="_blank" class="directions-btn">
-          🗺️ Get Cycling Directions
-        </a>
+        <span class="station-text" aria-hidden="true">
+          Station ${index + 1}: ${station.name}, ${distanceStr}, ${metricLabel}: ${metricValue}.
+        </span>
+        <button type="button" class="directions-btn gps-dir-btn" aria-hidden="true" tabindex="-1"
+          ${hasCoords ? `data-index="${index}"` : "disabled"}>
+          Show Map Route
+        </button>
       `;
-      this.stationList.appendChild(li);
+
+      li.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && hasCoords) {
+          e.preventDefault();
+          if (this.dom.stationDropdown) this.dom.stationDropdown.value = index;
+          this.selectStationByIndex(index);
+        }
+      });
+
+      this.dom.stationList.appendChild(li);
+      setTimeout(() => {
+        li.classList.add("appear");
+      }, 10);
     });
+
+    this.previousMetrics = currentMetrics;
+
+    setTimeout(() => {
+      initializeOrUpdateMap(stations, sortKey);
+    }, 50);
   }
 
-  /**
-   * Handles text-based city searching as a fallback feature
-   */
+  renderSkeletonLoaders(count = 3) {
+    if (!this.dom.stationList) return;
+    this.dom.stationList.innerHTML = "";
+
+    for (let i = 0; i < count; i++) {
+      const li = document.createElement("li");
+      li.className = "skeleton-card";
+      li.innerHTML = `
+        <div class="skeleton-content">
+          <div class="skeleton-line long"></div>
+          <div class="skeleton-line short"></div>
+        </div>
+        <div class="skeleton-btn"></div>
+      `;
+      this.dom.stationList.appendChild(li);
+    }
+  }
+
   async handleCitySearch(query) {
     const cleanQuery = query.trim().toLowerCase();
     if (!cleanQuery) {
-      this.setSearchStatus(
-        "⚠️ Please enter a city or network name first.",
-        "#d9534f",
-      );
+      this.updateDOM({
+        searchStatus: {
+          text: "Please enter a city or network name first.",
+          color: "#d9534f",
+        },
+      });
       return;
     }
 
-    this.setSearchStatus(
-      `Searching for networks matching "${query}"...`,
-      "#666",
-    );
-    this.stationSelectContainer.classList.add("hidden");
-    this.selectedStationDetails.innerHTML = "";
-    // Hide the search refresh button during a new search
-    if (this.searchRefreshBtn) {
-      this.searchRefreshBtn.classList.add("hidden");
-    }
-    if (this.directionsContainer) {
-      this.directionsContainer.classList.add("hidden");
-    }
-    if (this.directionsBtn) {
-      this.directionsBtn.href = "#";
-    }
+    this.updateDOM({
+      searchStatus: {
+        text: `Searching for networks matching ${query}.`,
+        color: "#666",
+      },
+      stationDetails: "",
+      showStationSelect: false,
+      showSearchRefresh: false,
+      showDirections: false,
+    });
 
     try {
       const networks = await NetworkService.fetchAllNetworks();
-
-      const matchedNetwork = networks.find((net) => {
-        const cityName = net.location.city
-          ? net.location.city.toLowerCase()
-          : "";
-        const networkName = net.name ? net.name.toLowerCase() : "";
-        const networkId = net.id ? net.id.toLowerCase() : "";
-
+      const matched = networks.find((net) => {
+        const city = net.location.city?.toLowerCase() || "";
+        const name = net.name?.toLowerCase() || "";
+        const id = net.id?.toLowerCase() || "";
         return (
-          cityName.includes(cleanQuery) ||
-          networkName.includes(cleanQuery) ||
-          networkId.includes(cleanQuery)
+          city.includes(cleanQuery) ||
+          name.includes(cleanQuery) ||
+          id.includes(cleanQuery)
         );
       });
 
-      if (!matchedNetwork) {
-        this.setSearchStatus(
-          `⚠️ No bike network found for "${query}".`,
-          "#d9534f",
-        );
+      if (!matched) {
+        this.updateDOM({
+          searchStatus: {
+            text: `No bike network found for ${query}.`,
+            color: "#d9534f",
+          },
+        });
         return;
       }
 
-      this.setSearchStatus(
-        `Found network: ${matchedNetwork.name}. Loading stations...`,
-        "#666",
-      );
-
-      this.currentNetworkId = matchedNetwork.id;
-
+      this.currentNetworkId = matched.id;
+      this.updateDOM({
+        searchStatus: {
+          text: `Found network: ${matched.name}. Loading stations.`,
+          color: "#666",
+        },
+      });
       const networkDetails = await NetworkService.fetchNetworkDetails(
-        matchedNetwork.id,
+        matched.id,
       );
       this.populateStationDropdown(networkDetails);
     } catch (error) {
-      console.error("Search error:", error);
-      this.setSearchStatus("⚠️ Failed to retrieve station data.", "#d9534f");
+      this.updateDOM({
+        searchStatus: {
+          text: "Failed to retrieve station data.",
+          color: "#d9534f",
+        },
+      });
     }
   }
 
-  /**
-   * Populates the station dropdown for the searched network
-   */
   populateStationDropdown(networkData) {
     const stations = networkData.stations || [];
-    this.currentStationsData = stations; // Store in memory
-    this.stationDropdown.innerHTML =
+    this.currentStationsData = stations;
+    this.dom.stationDropdown.innerHTML =
       '<option value="">-- Choose a station --</option>';
 
     if (stations.length === 0) {
-      this.setSearchStatus(
-        `Connected to ${networkData.name}, but no stations are available.`,
-        "#d9534f",
-      );
+      this.updateDOM({
+        searchStatus: {
+          text: `Connected to ${networkData.name}, but no stations available.`,
+          color: "#d9534f",
+        },
+      });
       return;
     }
 
-    this.setSearchStatus(`Network loaded successfully!`, "green");
-    this.networkTitleLabel.textContent = `Select a station from ${networkData.name} (${stations.length} available):`;
+    this.updateDOM({
+      searchStatus: { text: "Network loaded successfully.", color: "green" },
+    });
+    this.dom.networkTitle.textContent = `Select a station from ${networkData.name} (${stations.length} available):`;
 
     stations.forEach((station, index) => {
-      const option = document.createElement("option");
-      option.value = index;
-      option.textContent = station.name;
-      this.stationDropdown.appendChild(option);
+      const opt = document.createElement("option");
+      opt.value = index;
+      opt.textContent = station.name;
+      this.dom.stationDropdown.appendChild(opt);
     });
 
-    this.stationSelectContainer.classList.remove("hidden");
-    //Reveal the search refresh button now that a network is loaded
-    if (this.searchRefreshBtn) {
-      this.searchRefreshBtn.classList.remove("hidden");
-    }
+    this.updateDOM({ showStationSelect: true, showSearchRefresh: true });
   }
 
-  /**
-   * Starts background polling every 30 seconds
-   */
   startPolling() {
     this.stopPolling();
     this.pollingInterval = setInterval(() => {
-      if (this.cachedCoords && this.dropdown?.value) {
+      if (currentUserCoords && this.dom.dropdown?.value) {
         this.updateStations(false);
       }
     }, 30000);
   }
 
-  /**
-   * Clears background polling interval
-   */
   stopPolling() {
     if (this.pollingInterval) {
       clearInterval(this.pollingInterval);
@@ -466,7 +627,238 @@ export default class AppController {
   }
 }
 
-// Automatically instantiate the application controller when DOM is ready
-window.addEventListener("DOMContentLoaded", () => {
-  new AppController();
-});
+window.addEventListener("DOMContentLoaded", () => new AppController());
+
+// --- MAP & MARKER MANAGEMENT ---
+
+function initializeOrUpdateMap(stations, sortKey) {
+  const directionsContainer = document.getElementById("directionsContainer");
+  directionsContainer.classList.remove("hidden");
+
+  const mapElement = document.getElementById("map");
+  if (mapElement) {
+    mapElement.setAttribute("aria-hidden", "true");
+  }
+
+  if (!mapInstance) {
+    const centerCoord = currentUserCoords
+      ? [currentUserCoords.longitude, currentUserCoords.latitude]
+      : [stations[0].longitude, stations[0].latitude];
+
+    mapInstance = new maplibregl.Map({
+      container: "map",
+      attributionControl: false,
+      style: {
+        version: 8,
+        sources: {
+          "osm-tiles": {
+            type: "raster",
+            tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
+            tileSize: 256,
+          },
+        },
+        layers: [
+          {
+            id: "osm-tiles-layer",
+            type: "raster",
+            source: "osm-tiles",
+            minzoom: 0,
+            maxzoom: 19,
+          },
+        ],
+      },
+      center: centerCoord,
+      zoom: 13,
+    });
+
+    mapInstance.on("load", () => {
+      renderAllStationMarkers(stations);
+      updateUserMarker();
+    });
+  } else {
+    mapInstance.resize();
+    renderAllStationMarkers(stations);
+    updateUserMarker();
+  }
+}
+
+function renderAllStationMarkers(stations) {
+  stationMarkers.forEach((m) => m.remove());
+  stationMarkers = [];
+
+  stations.forEach((station, index) => {
+    if (!station.latitude || !station.longitude) return;
+
+    const el = document.createElement("div");
+    el.className = "map-station-pin";
+    el.innerHTML = `<span>📍</span>`;
+    el.style.cursor = "pointer";
+    el.style.fontSize = "20px";
+
+    el.setAttribute("role", "button");
+    el.setAttribute("tabindex", "0");
+    el.setAttribute("aria-label", `Bike station: ${station.name}`);
+
+    const marker = new maplibregl.Marker({ element: el })
+      .setLngLat([station.longitude, station.latitude])
+      .addTo(mapInstance);
+
+    const selectThisStation = () => {
+      if (appControllerInstance) {
+        if (appControllerInstance.dom.stationDropdown) {
+          appControllerInstance.dom.stationDropdown.value = index;
+        }
+        appControllerInstance.selectStationByIndex(index);
+      }
+    };
+
+    el.addEventListener("click", selectThisStation);
+    el.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === "Space") {
+        e.preventDefault();
+        selectThisStation();
+      }
+    });
+
+    stationMarkers.push(marker);
+  });
+}
+
+function updateUserMarker() {
+  if (!currentUserCoords) return;
+  if (userMarker) {
+    userMarker.setLngLat([
+      currentUserCoords.longitude,
+      currentUserCoords.latitude,
+    ]);
+  } else {
+    userMarker = new maplibregl.Marker({ color: "#34A853" })
+      .setLngLat([currentUserCoords.longitude, currentUserCoords.latitude])
+      .addTo(mapInstance);
+  }
+}
+
+async function showRouteToStation(station, sortKey) {
+  const directionsContainer = document.getElementById("directionsContainer");
+  const directionsHeader = document.getElementById("directionsHeader");
+
+  directionsContainer.classList.remove("hidden");
+  directionsContainer.setAttribute("role", "region");
+  directionsContainer.setAttribute(
+    "aria-label",
+    `Route directions to ${station.name}`,
+  );
+
+  if (directionsHeader) {
+    directionsHeader.textContent = `Route to: ${station.name}`;
+  }
+
+  if (!mapInstance) {
+    const centerCoord = currentUserCoords
+      ? [currentUserCoords.longitude, currentUserCoords.latitude]
+      : [station.longitude, station.latitude];
+
+    mapInstance = new maplibregl.Map({
+      container: "map",
+      attributionControl: false,
+      style: {
+        version: 8,
+        sources: {
+          "osm-tiles": {
+            type: "raster",
+            tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
+            tileSize: 256,
+          },
+        },
+        layers: [
+          {
+            id: "osm-tiles-layer",
+            type: "raster",
+            source: "osm-tiles",
+            minzoom: 0,
+            maxzoom: 19,
+          },
+        ],
+      },
+      center: centerCoord,
+      zoom: 13,
+    });
+
+    await new Promise((resolve) => mapInstance.on("load", resolve));
+  } else {
+    mapInstance.resize();
+  }
+
+  if (
+    appControllerInstance &&
+    appControllerInstance.currentStationsData.length > 0
+  ) {
+    renderAllStationMarkers(appControllerInstance.currentStationsData);
+  }
+
+  updateUserMarker();
+
+  let routeCoordinates = currentUserCoords
+    ? [
+        [currentUserCoords.longitude, currentUserCoords.latitude],
+        [station.longitude, station.latitude],
+      ]
+    : [[station.longitude, station.latitude]];
+
+  if (currentUserCoords) {
+    try {
+      const profile = sortKey === "empty_slots" ? "cycling" : "foot";
+      const res = await fetch(
+        `https://router.project-osrm.org/route/v1/${profile}/${currentUserCoords.longitude},${currentUserCoords.latitude};${station.longitude},${station.latitude}?overview=full&geometries=geojson`,
+      );
+      const data = await res.json();
+      if (data.code === "Ok" && data.routes?.length > 0) {
+        routeCoordinates = data.routes[0].geometry.coordinates;
+      }
+    } catch (e) {
+      console.warn("Routing fallback applied:", e);
+    }
+  }
+
+  const geojson = {
+    type: "Feature",
+    geometry: { type: "LineString", coordinates: routeCoordinates },
+  };
+
+  if (mapInstance.getSource("route-source")) {
+    mapInstance.getSource("route-source").setData(geojson);
+  } else if (mapInstance.isStyleLoaded()) {
+    mapInstance.addSource("route-source", { type: "geojson", data: geojson });
+    mapInstance.addLayer({
+      id: "route-line",
+      type: "line",
+      source: "route-source",
+      layout: { "line-join": "round", "line-cap": "round" },
+      paint: { "line-color": "#4285f4", "line-width": 5, "line-opacity": 0.75 },
+    });
+  }
+
+  if (currentUserCoords) {
+    mapInstance.flyTo({
+      center: [
+        (currentUserCoords.longitude + station.longitude) / 2,
+        (currentUserCoords.latitude + station.latitude) / 2,
+      ],
+      zoom: 15,
+    });
+  } else {
+    mapInstance.flyTo({
+      center: [station.longitude, station.latitude],
+      zoom: 15,
+    });
+  }
+
+  directionsContainer.scrollIntoView({ behavior: "smooth" });
+
+  if (directionsHeader) {
+    directionsHeader.setAttribute("tabindex", "-1");
+    setTimeout(() => {
+      directionsHeader.focus();
+    }, 250);
+  }
+}
