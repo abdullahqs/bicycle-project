@@ -214,8 +214,8 @@ body {
 
 @keyframes highlightFlash {
   0% {
-    background-color: #d4edda;
-    border-color: #28a745;
+    background-color: #28a745;
+    color: #ffffff;
   }
   100% {
     background-color: var(--card-bg);

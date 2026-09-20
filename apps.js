@@ -361,14 +361,27 @@ export default class AppController {
         ? `${station.distance.toFixed(1)} kilometers away`
         : "Distance unknown";
 
+      // Clean the station name so raw symbols like '&' and abbreviations don't crash the screen reader
+      const cleanName = (station.name || "")
+        .replace(/\bSt\./g, "Street")
+        .replace(/\bAve\./g, "Avenue")
+        .replace(/\bRd\./g, "Road")
+        .replace(/\bBlvd\./g, "Boulevard")
+        .replace(/\bHwy\./g, "Highway")
+        .replace(/\bHwy\b/g, "Highway")
+        .replace(/\bDr\./g, "Drive")
+        .replace(/\bCt\./g, "Court")
+        .replace(/\bLn\./g, "Lane")
+        .replace(/&/g, " and ");
+
       li.setAttribute(
         "aria-label",
-        `Station ${index + 1}, ${station.name}, ${distanceStr}, ${metricLabel} ${metricValue}. Press Enter to show map route.`,
+        `Station ${index + 1}, ${cleanName}, ${distanceStr}, ${metricLabel} ${metricValue}. Press Enter to show map route.`,
       );
 
       li.innerHTML = `
         <span class="station-text" aria-hidden="true">
-          Station ${index + 1}: ${station.name}, ${distanceStr}, ${metricLabel}: ${metricValue}.
+          Station ${index + 1}: ${cleanName}, ${distanceStr}, ${metricLabel}: ${metricValue}.
         </span>
         <button type="button" class="directions-btn gps-dir-btn" aria-hidden="true" tabindex="-1"
           ${hasCoords ? `data-index="${index}"` : "disabled"}>
@@ -404,7 +417,6 @@ export default class AppController {
       );
     }, 50);
   }
-
   async handleCitySearch(query) {
     const cleanQuery = query.trim().toLowerCase();
     if (this.ui.dom.stationList) this.ui.dom.stationList.innerHTML = "";
