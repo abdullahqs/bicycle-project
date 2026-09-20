@@ -193,6 +193,7 @@ export default class AppController {
   }
 
   async updateStations(isManual) {
+    this.isLastActionManual = isManual;
     if (!this.currentUserCoords) {
       this.ui.updateDOM({
         status: {
@@ -222,6 +223,9 @@ export default class AppController {
       this.ui.updateDOM({
         status: { text: "Fetching latest station data.", color: "#666" },
       });
+    }
+    if (isManual || this.currentStationsData.length === 0) {
+      this.ui.renderSkeletonLoaders(4);
     }
 
     try {
@@ -270,7 +274,7 @@ export default class AppController {
 
       const newHash = JSON.stringify(simplifiedData);
 
-      // 🛑 STRICT CHECK: If it's a background poll (!isManual), and hash + sortKey match, abort completely!
+      // STRICT CHECK: If it's a background poll (!isManual), and hash + sortKey match, abort completely!
       if (
         !isManual &&
         newHash === this.cachedHash &&
@@ -279,11 +283,9 @@ export default class AppController {
         console.log(
           "Polling check: Station data is identical. Skipping re-render.",
         );
+        this.renderStations(this.currentStationsData, sortKey, "Bike Network");
         return;
       }
-
-      // Only show skeletons and clear lists if we are actually proceeding with a visual update
-      this.ui.renderSkeletonLoaders(4);
 
       this.cachedHash = newHash;
       this.lastRenderedSortKey = sortKey;
@@ -399,7 +401,11 @@ export default class AppController {
       });
 
       this.ui.dom.stationList.appendChild(li);
-      setTimeout(() => li.classList.add("appear"), 10);
+      if (this.isLastActionManual) {
+        setTimeout(() => li.classList.add("appear"), 10);
+      } else {
+        li.classList.add("appear");
+      }
     });
 
     this.previousMetrics = currentMetrics;
