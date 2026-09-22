@@ -27,7 +27,7 @@ the maplibre library is used in this project and it cost 212 kb fthe js file and
 router.project-osrm.org is also ued to get direction. <br>
 I use lighthouse to check how the app is performing and the app has 100% performance and 95% accessibilty on desktop and the same for mobile accessibilty <br>
 ![desktop](./accessiblity-desktop.png)
-![Performance Screen](./mobile-performance.png) <br>
+![Performance Screen](./mobile-performance.PNG) <br>
 I used hash to make sure that the app does not update anything until there is a change in data. So even though there is a pull every 30 seconds. Dom will not change until one of the station data have change. Also I use consistent layout between the gps and non gps mode where the map show under the station every time in both modes <br>
 The video show the app in action
 [![Watch the App Demo](thumbnail.png)](./Recording_app.mp4) <br>
