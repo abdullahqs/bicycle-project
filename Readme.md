@@ -29,7 +29,7 @@ I use lighthouse to check how the app is performing and the app has 100% perform
 ![desktop](./accessiblity-desktop.png)
 ![Performance Screen](./mobile-performance.PNG) <br>
 this lighthouse show improvement compared to the older app numbers shown below<br>
-![old app](./old-app.PNG) <br>
+![old app](./old-app.png) <br>
 I used hash to make sure that the app does not update anything until there is a change in data. So even though there is a pull every 30 seconds. Dom will not change until one of the station data have change. Also I use consistent layout between the gps and non gps mode where the map show under the station every time in both modes <br>
 The video show the old app in action before updating
 [![Watch the App Demo](thumbnail.png)](./Recording_app.mp4) <br>
